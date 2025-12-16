@@ -13,6 +13,7 @@ import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.card.MaterialCardView;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
 
 import java.util.List;
@@ -37,9 +38,28 @@ public class MainActivity extends AppCompatActivity {
     private TextView taskCountTextView, taskSummaryTextView;
     private MaterialCardView todoSummaryCard;
 
+    // Variabel global untuk menyimpan user yang sedang login
+    private FirebaseUser currentUser;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // --- LANGKAH KRESIAL: CEK STATUS LOGIN ---
+        currentUser = FirebaseHelper.getCurrentUser();
+
+        if (currentUser == null) {
+            // Jika user belum login, segera arahkan ke LoginActivity
+            Intent intent = new Intent(MainActivity.this, LoginActivity.class);
+            // Gunakan flag ini agar user tidak bisa kembali ke MainActivity dengan tombol Back
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+            finish(); // Hentikan MainActivity agar tidak lanjut memuat layout
+            return; // Keluar dari onCreate
+        }
+
+        // Jika sampai di sini, berarti user SUDAH login.
+        // Lanjutkan memuat tampilan.
         setContentView(R.layout.activity_main);
 
         initViews();
@@ -48,8 +68,10 @@ public class MainActivity extends AppCompatActivity {
         // --- (Weather, Location, Profile) ---
         // setupLocationServices(); // TODO: Location
         // loadWeatherData();       // TODO: Weather
-        loadUserData();             // TODO: Auth
-        loadTodoSummary();
+
+        // Kita kirim currentUser ke method ini agar tidak perlu memanggil getCurrentUser() berulang kali
+        loadUserData(currentUser);
+        loadTodoSummary(currentUser);
     }
 
     private void initViews() {
@@ -58,6 +80,8 @@ public class MainActivity extends AppCompatActivity {
 
         welcomeTextView = findViewById(R.id.welcomeTextView);
         userNameTextView = findViewById(R.id.userNameTextView);
+        // Set teks loading sementara sambil menunggu data dari Firestore
+        userNameTextView.setText("Loading...");
 
         // Weather IDs
         temperatureTextView = findViewById(R.id.temperatureTextView);
@@ -88,7 +112,7 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "Notification Feature coming soon", Toast.LENGTH_SHORT).show();
                 return true;
             } else if (itemId == R.id.navigation_profile) {
-                // TODO: Profile
+                // TODO: Profile Activity (Tempat untuk Logout nanti)
                 // startActivity(new Intent(MainActivity.this, ProfileActivity.class));
                 Toast.makeText(this, "Profile Feature coming soon", Toast.LENGTH_SHORT).show();
                 return true;
@@ -98,18 +122,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // --- TO DO SUMMARY ---
-    private void loadTodoSummary() {
-        FirebaseUser firebaseUser = FirebaseHelper.getCurrentUser();
+    // Menerima parameter user yang sudah dipastikan login
+    private void loadTodoSummary(FirebaseUser user) {
+        // Kode "Guest Mode" dihapus karena tidak mungkin null di sini
 
-        // Jika User belum login (Testing Mode), kita bisa return atau pakai dummy data
-        if (firebaseUser == null) {
-            taskCountTextView.setText("Guest Mode");
-            taskSummaryTextView.setText("Please login to see tasks");
-            return;
-            // Atau bypass pakai ID dummy seperti di ToDoActivity untuk testing
-        }
-
-        FirebaseHelper.getUserTodos(firebaseUser.getUid(), task -> {
+        FirebaseHelper.getUserTodos(user.getUid(), task -> {
             if (task.isSuccessful()) {
                 QuerySnapshot querySnapshot = task.getResult();
                 if (querySnapshot != null) {
@@ -128,7 +145,7 @@ public class MainActivity extends AppCompatActivity {
                     updateTodoSummary(totalTasks, pendingTasks);
                 }
             } else {
-                taskSummaryTextView.setText("Failed to load tasks");
+                taskSummaryTextView.setText("Failed to load tasks summary");
             }
         });
     }
@@ -153,14 +170,31 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void loadUserData() {
-        // TODO: Tim Auth akan mengisi ini untuk mengambil Nama User dari Firestore
-        FirebaseUser user = FirebaseHelper.getCurrentUser();
-        if (user != null) {
-            // String email = user.getEmail();
-            // userNameTextView.setText(email); // Sementara pakai email dulu
-            userNameTextView.setText("Welcome Back!");
-        }
+    // --- LOAD USER DATA (Mengambil Nama dari Firestore) ---
+    private void loadUserData(FirebaseUser user) {
+        // Menggunakan method getUser yang sudah di-uncomment di FirebaseHelper
+        FirebaseHelper.getUser(user.getUid(), task -> {
+            if (task.isSuccessful()) {
+                DocumentSnapshot document = task.getResult();
+                if (document != null && document.exists()) {
+                    // Ambil field "name" dari dokumen Firestore
+                    String name = document.getString("name");
+                    if (name != null && !name.isEmpty()) {
+                        userNameTextView.setText(name);
+                    } else {
+                        // Jika field name kosong, gunakan email sebagai fallback
+                        userNameTextView.setText(user.getEmail());
+                    }
+                } else {
+                    // Dokumen tidak ditemukan (jarang terjadi jika alur register benar)
+                    userNameTextView.setText("Welcome User!");
+                }
+            } else {
+                // Gagal mengambil data (misal koneksi internet mati)
+                Toast.makeText(MainActivity.this, "Failed to fetch profile name", Toast.LENGTH_SHORT).show();
+                userNameTextView.setText("Welcome!");
+            }
+        });
     }
 
     /* private void setupLocationServices() {
@@ -175,10 +209,18 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Refresh data saat kembali dari halaman ToDoActivity
-        loadTodoSummary();
+        // Cek lagi user saat resume, untuk berjaga-jaga
+        currentUser = FirebaseHelper.getCurrentUser();
 
-        // Pastikan menu Home terpilih saat balik ke sini
-        bottomNavigation.setSelectedItemId(R.id.navigation_home);
+        if (currentUser != null) {
+            // Refresh data ToDo saat kembali dari halaman ToDoActivity
+            loadTodoSummary(currentUser);
+
+            // Pastikan menu Home terpilih saat balik ke sini
+            bottomNavigation.setSelectedItemId(R.id.navigation_home);
+        } else {
+            // Jika tiba-tiba sesi habis saat resume, panggil onCreate lagi untuk diredirect
+            recreate();
+        }
     }
 }

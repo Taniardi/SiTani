@@ -1,4 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">SiTani</string>
+
+    <string name="error_password">Password tidak boleh kosong dan harus minimal 6 karakter.</string>
+
+    <string name="error_email">Mohon masukkan alamat email yang valid.</string>
+
+    <string name="error_login">Autentikasi gagal. Silakan periksa kredensial dan koneksi internet Anda.</string>
+
+    <string name="error_fields">Field ini tidak boleh kosong.</string>
+    <string name="error_register">Registrasi gagal. Silakan coba lagi.</string>
+
+
+    <string name="sign_in_title">Sign In</string>
+    <string name="welcome_subtitle">Good to see you again!</string>
+    <string name="email_hint">Email</string>
+    <string name="password_hint">Password</string>
+    <string name="continue_button_text">Continue</string>
+    <string name="forgot_password_text">Forgot Password?</string>
+    <string name="new_user_question_text">Are you a new user? </string>
+    <string name="sign_up_link_text">Sign Up</string>
     <string name="app_name">My Application</string>
 
     <string name="weather_notification_title">Daily Weather Update</string>

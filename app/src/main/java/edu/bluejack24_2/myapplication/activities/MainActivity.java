@@ -22,6 +22,7 @@ import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.card.MaterialCardView;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
 
 import java.util.List;
@@ -51,6 +52,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView taskCountTextView, taskSummaryTextView;
     private MaterialCardView todoSummaryCard;
 
+    // Variabel global untuk menyimpan user yang sedang login
+    private FirebaseUser currentUser;
     // Location & User Data
     private FusedLocationProviderClient fusedLocationClient;
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
@@ -58,6 +61,22 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // --- LANGKAH KRESIAL: CEK STATUS LOGIN ---
+        currentUser = FirebaseHelper.getCurrentUser();
+
+        if (currentUser == null) {
+            // Jika user belum login, segera arahkan ke LoginActivity
+            Intent intent = new Intent(MainActivity.this, LoginActivity.class);
+            // Gunakan flag ini agar user tidak bisa kembali ke MainActivity dengan tombol Back
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+            finish(); // Hentikan MainActivity agar tidak lanjut memuat layout
+            return; // Keluar dari onCreate
+        }
+
+        // Jika sampai di sini, berarti user SUDAH login.
+        // Lanjutkan memuat tampilan.
         setContentView(R.layout.activity_main);
 
         initViews();
@@ -78,6 +97,8 @@ public class MainActivity extends AppCompatActivity {
 
         welcomeTextView = findViewById(R.id.welcomeTextView);
         userNameTextView = findViewById(R.id.userNameTextView);
+        // Set teks loading sementara sambil menunggu data dari Firestore
+        userNameTextView.setText("Loading...");
 
         // Weather IDs
         temperatureTextView = findViewById(R.id.temperatureTextView);
@@ -105,6 +126,8 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "Notification Feature coming soon", Toast.LENGTH_SHORT).show();
                 return true;
             } else if (itemId == R.id.navigation_profile) {
+                // TODO: Profile Activity (Tempat untuk Logout nanti)
+                // startActivity(new Intent(MainActivity.this, ProfileActivity.class));
                 Toast.makeText(this, "Profile Feature coming soon", Toast.LENGTH_SHORT).show();
                 return true;
             }
@@ -219,29 +242,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // --- TO DO SUMMARY ---
+    // Menerima parameter user yang sudah dipastikan login
+    private void loadTodoSummary(FirebaseUser user) {
+        // Kode "Guest Mode" dihapus karena tidak mungkin null di sini
 
-    private void loadTodoSummary() {
-        // --- MODE TESTING (JIKA PERLU BYPASS LOGIN) ---
-        // String testUserId = "user_test_123";
-        // Ubah logika di bawah jika mau pakai testUserId
-
-        FirebaseUser firebaseUser = FirebaseHelper.getCurrentUser();
-
-        if (firebaseUser == null) {
-            // Jika belum login, tampilkan pesan guest
-            taskCountTextView.setText("Welcome!");
-            taskSummaryTextView.setText("Please login to see tasks");
-
-            // NOTE: Uncomment baris di bawah ini jika ingin TESTING TANPA LOGIN
-            /*
-            FirebaseHelper.getUserTodos("user_test_123", task -> {
-                 // copy logic sukses di bawah ke sini
-            });
-            */
-            return;
-        }
-
-        FirebaseHelper.getUserTodos(firebaseUser.getUid(), task -> {
+        FirebaseHelper.getUserTodos(user.getUid(), task -> {
             if (task.isSuccessful()) {
                 QuerySnapshot querySnapshot = task.getResult();
                 if (querySnapshot != null) {
@@ -259,7 +264,7 @@ public class MainActivity extends AppCompatActivity {
                     updateTodoSummary(totalTasks, pendingTasks);
                 }
             } else {
-                taskSummaryTextView.setText("Failed to load tasks");
+                taskSummaryTextView.setText("Failed to load tasks summary");
             }
         });
     }

@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">My Application</string>
+
+    <string name="weather_notification_title">Daily Weather Update</string>
+    <string name="weather_notification_text">Check out the weather today!"</string>
+
 </resources>

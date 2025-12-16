@@ -1,14 +1,23 @@
 package edu.bluejack24_2.myapplication.activities;
 
+import edu.bluejack24_2.myapplication.utils.WeatherApiClient;
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.location.Location;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.card.MaterialCardView;
@@ -19,8 +28,13 @@ import java.util.List;
 
 import edu.bluejack24_2.myapplication.R;
 import edu.bluejack24_2.myapplication.models.TodoItem;
+import edu.bluejack24_2.myapplication.models.WeatherResponse;
+import edu.bluejack24_2.myapplication.utils.Constants; // Pastikan punya file ini untuk API KEY
 import edu.bluejack24_2.myapplication.utils.FirebaseHelper;
-
+import edu.bluejack24_2.myapplication.utils.WeatherApiClient; // Pastikan punya file ini
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -28,7 +42,7 @@ public class MainActivity extends AppCompatActivity {
     private BottomNavigationView bottomNavigation;
     private TextView welcomeTextView, userNameTextView;
 
-    // Weather Views (Placeholder untuk tim kamu)
+    // Weather Views
     private TextView temperatureTextView, descriptionTextView, locationTextView;
     private MaterialCardView weatherCard;
     private ProgressBar weatherProgressBar;
@@ -36,6 +50,10 @@ public class MainActivity extends AppCompatActivity {
     // ToDo Views
     private TextView taskCountTextView, taskSummaryTextView;
     private MaterialCardView todoSummaryCard;
+
+    // Location & User Data
+    private FusedLocationProviderClient fusedLocationClient;
+    private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,10 +63,12 @@ public class MainActivity extends AppCompatActivity {
         initViews();
         setupBottomNavigation();
 
-        // --- (Weather, Location, Profile) ---
-        // setupLocationServices(); // TODO: Location
-        // loadWeatherData();       // TODO: Weather
-        loadUserData();             // TODO: Auth
+        // --- Init Services ---
+        setupLocationServices();
+
+        // --- Load Data ---
+        loadWeatherData();
+        loadUserData();
         loadTodoSummary();
     }
 
@@ -77,19 +97,14 @@ public class MainActivity extends AppCompatActivity {
             int itemId = item.getItemId();
 
             if (itemId == R.id.navigation_home) {
-                // Stay here
                 return true;
             } else if (itemId == R.id.navigation_dashboard) {
-                // Dashboard mengarah ke List ToDo lengkap
                 startActivity(new Intent(MainActivity.this, ToDoActivity.class));
                 return true;
             } else if (itemId == R.id.navigation_notifications) {
-                // TODO: Notifikasi
                 Toast.makeText(this, "Notification Feature coming soon", Toast.LENGTH_SHORT).show();
                 return true;
             } else if (itemId == R.id.navigation_profile) {
-                // TODO: Profile
-                // startActivity(new Intent(MainActivity.this, ProfileActivity.class));
                 Toast.makeText(this, "Profile Feature coming soon", Toast.LENGTH_SHORT).show();
                 return true;
             }
@@ -97,16 +112,133 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // --- LOCATION SERVICES ---
+
+    private void setupLocationServices() {
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+    }
+
+    private void loadWeatherData() {
+        // Cek permission lokasi terlebih dahulu
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                    LOCATION_PERMISSION_REQUEST_CODE);
+        } else {
+            getCurrentLocation();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                getCurrentLocation();
+            } else {
+                Toast.makeText(this, "Location permission denied. Showing default weather.", Toast.LENGTH_SHORT).show();
+                loadWeatherForDefaultLocation();
+            }
+        }
+    }
+
+    private void getCurrentLocation() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        fusedLocationClient.getLastLocation().addOnSuccessListener(this, location -> {
+            if (location != null) {
+                loadWeatherForLocation(location.getLatitude(), location.getLongitude());
+            } else {
+                // Jika lokasi null (misal GPS mati), pakai default
+                loadWeatherForDefaultLocation();
+            }
+        });
+    }
+
+    private void loadWeatherForDefaultLocation() {
+        // Default Jakarta
+        loadWeatherForLocation(-6.2088, 106.8456);
+    }
+
+    // --- WEATHER API LOGIC ---
+
+    private void loadWeatherForLocation(double lat, double lon) {
+        if (weatherProgressBar != null) weatherProgressBar.setVisibility(View.VISIBLE);
+
+        String apiKey = Constants.OPENWEATHER_API_KEY;
+
+        WeatherApiClient.getWeatherService()
+                .getCurrentWeather(lat, lon, apiKey, "metric")
+                .enqueue(new Callback<WeatherResponse>() {
+                    @Override
+                    public void onResponse(Call<WeatherResponse> call, Response<WeatherResponse> response) {
+                        if (weatherProgressBar != null) weatherProgressBar.setVisibility(View.GONE);
+
+                        if (response.isSuccessful() && response.body() != null) {
+                            updateWeatherUI(response.body());
+                        } else {
+                            locationTextView.setText("Weather Info Unavailable");
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<WeatherResponse> call, Throwable t) {
+                        if (weatherProgressBar != null) weatherProgressBar.setVisibility(View.GONE);
+                        locationTextView.setText("Network Error");
+                        Toast.makeText(MainActivity.this, "Failed to load weather", Toast.LENGTH_SHORT).show();
+                    }
+                });
+    }
+
+    private void updateWeatherUI(WeatherResponse weather) {
+        if (weather == null) return;
+
+        // Update Location Name
+        String cityName = weather.getName();
+        locationTextView.setText(cityName != null ? cityName : "Unknown Location");
+
+        // Update Temp
+        if (weather.getMain() != null) {
+            double temp = weather.getMain().getTemp();
+            temperatureTextView.setText(String.format("%.1f°C", temp));
+        }
+
+        // Update Description
+        if (weather.getWeather() != null && weather.getWeather().length > 0) {
+            String desc = weather.getWeather()[0].getDescription();
+            // Capitalize first letter
+            if (desc != null && !desc.isEmpty()) {
+                desc = desc.substring(0, 1).toUpperCase() + desc.substring(1);
+            }
+            descriptionTextView.setText(desc);
+        }
+    }
+
     // --- TO DO SUMMARY ---
+
     private void loadTodoSummary() {
+        // --- MODE TESTING (JIKA PERLU BYPASS LOGIN) ---
+        // String testUserId = "user_test_123";
+        // Ubah logika di bawah jika mau pakai testUserId
+
         FirebaseUser firebaseUser = FirebaseHelper.getCurrentUser();
 
-        // Jika User belum login (Testing Mode), kita bisa return atau pakai dummy data
         if (firebaseUser == null) {
-            taskCountTextView.setText("Guest Mode");
+            // Jika belum login, tampilkan pesan guest
+            taskCountTextView.setText("Welcome!");
             taskSummaryTextView.setText("Please login to see tasks");
+
+            // NOTE: Uncomment baris di bawah ini jika ingin TESTING TANPA LOGIN
+            /*
+            FirebaseHelper.getUserTodos("user_test_123", task -> {
+                 // copy logic sukses di bawah ke sini
+            });
+            */
             return;
-            // Atau bypass pakai ID dummy seperti di ToDoActivity untuk testing
         }
 
         FirebaseHelper.getUserTodos(firebaseUser.getUid(), task -> {
@@ -124,7 +256,6 @@ public class MainActivity extends AppCompatActivity {
                             pendingTasks++;
                         }
                     }
-
                     updateTodoSummary(totalTasks, pendingTasks);
                 }
             } else {
@@ -141,12 +272,10 @@ public class MainActivity extends AppCompatActivity {
         } else if (pendingTasks == 0) {
             taskSummaryTextView.setText("All tasks completed! Great job!");
         } else {
-            // Logic text plural/singular
             String taskText = pendingTasks > 1 ? "tasks" : "task";
             taskSummaryTextView.setText("You have " + pendingTasks + " pending " + taskText);
         }
 
-        // Klik Card untuk pindah ke halaman ToDoActivity
         todoSummaryCard.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, ToDoActivity.class);
             startActivity(intent);
@@ -154,31 +283,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadUserData() {
-        // TODO: Tim Auth akan mengisi ini untuk mengambil Nama User dari Firestore
         FirebaseUser user = FirebaseHelper.getCurrentUser();
         if (user != null) {
-            // String email = user.getEmail();
-            // userNameTextView.setText(email); // Sementara pakai email dulu
             userNameTextView.setText("Welcome Back!");
+            // Nanti bisa fetch nama user dari Firestore 'users' collection di sini
+        } else {
+            userNameTextView.setText("Guest");
         }
     }
-
-    /* private void setupLocationServices() {
-
-    }
-
-    private void loadWeatherData() {
-
-    }
-    */
 
     @Override
     protected void onResume() {
         super.onResume();
-        // Refresh data saat kembali dari halaman ToDoActivity
         loadTodoSummary();
-
-        // Pastikan menu Home terpilih saat balik ke sini
         bottomNavigation.setSelectedItemId(R.id.navigation_home);
     }
 }

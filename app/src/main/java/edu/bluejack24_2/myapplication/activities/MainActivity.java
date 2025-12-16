@@ -88,7 +88,7 @@ public class MainActivity extends AppCompatActivity {
         // --- Load Data ---
         loadWeatherData();
         loadUserData();
-        loadTodoSummary();
+        loadTodoSummary(currentUser);
     }
 
     private void initViews() {
@@ -300,7 +300,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        loadTodoSummary();
+        loadTodoSummary(currentUser);
         bottomNavigation.setSelectedItemId(R.id.navigation_home);
     }
 }

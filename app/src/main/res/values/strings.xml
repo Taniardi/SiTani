@@ -20,7 +20,7 @@
     <string name="forgot_password_text">Forgot Password?</string>
     <string name="new_user_question_text">Are you a new user? </string>
     <string name="sign_up_link_text">Sign Up</string>
-    <string name="app_name">My Application</string>
+
 
     <string name="weather_notification_title">Daily Weather Update</string>
     <string name="weather_notification_text">Check out the weather today!"</string>

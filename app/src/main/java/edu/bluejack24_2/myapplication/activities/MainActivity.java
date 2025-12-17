@@ -126,9 +126,7 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "Notification Feature coming soon", Toast.LENGTH_SHORT).show();
                 return true;
             } else if (itemId == R.id.navigation_profile) {
-                // TODO: Profile Activity (Tempat untuk Logout nanti)
-                // startActivity(new Intent(MainActivity.this, ProfileActivity.class));
-                Toast.makeText(this, "Profile Feature coming soon", Toast.LENGTH_SHORT).show();
+                startActivity(new Intent(MainActivity.this, ProfileActivity.class));
                 return true;
             }
             return false;

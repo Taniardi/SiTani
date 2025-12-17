@@ -130,7 +130,8 @@ public class ToDoActivity extends AppCompatActivity implements TodoAdapter.OnTod
                 Toast.makeText(this, "Notification Feature coming soon", Toast.LENGTH_SHORT).show();
                 return true;
             } else if (itemId == R.id.navigation_profile) {
-                Toast.makeText(this, "Profile Feature coming soon", Toast.LENGTH_SHORT).show();
+                startActivity(new Intent(ToDoActivity.this, ProfileActivity.class));
+                finish();
                 return true;
             }
             return false;

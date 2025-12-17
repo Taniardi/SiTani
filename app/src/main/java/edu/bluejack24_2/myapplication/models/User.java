@@ -8,6 +8,7 @@ public class User {
     // Saat registrasi awal, nilainya akan null.
     private String phone;
     private String address;
+    private String profileImageUrl;
     private long createdAt;
 
     // Default Constructor (Wajib diperlukan oleh Firebase Firestore untuk deserialisasi data)
@@ -90,5 +91,14 @@ public class User {
 
     public void setCreatedAt(long createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getProfileImageUrl() {
+        if (profileImageUrl == null) return "";
+        return profileImageUrl;
+    }
+
+    public void setProfileImageUrl(String profileImageUrl) {
+        this.profileImageUrl = profileImageUrl;
     }
 }
